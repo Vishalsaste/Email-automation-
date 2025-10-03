@@ -24,28 +24,44 @@ with st.container():
 
 # --- Upload Section ---
 with st.container():
-    st.subheader("📂 Upload Recipient List")
-    st.markdown("CSV must contain: **email, first_name, last_name**")
+    st.subheader("📂 Upload Recipient List / Sent Emails Log")
+    st.markdown(
+        "CSV must contain the following columns: "
+        "**email, first_name, last_name, sent_status, first_email_subject, first_email_body**"
+    )
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
     df = None
     if uploaded_file is not None:
         try:
-            uploaded_file.seek(0)  # reset pointer
+            # Check if file is empty
             if uploaded_file.getbuffer().nbytes == 0:
                 st.error("❌ Uploaded file is empty. Please upload a valid CSV.")
             else:
-                # ✅ Read CSV with encoding fallback
+                # Reset pointer before reading
+                uploaded_file.seek(0)
+                
+                # Attempt UTF-8 first, fallback to Latin1
                 try:
                     df = pd.read_csv(uploaded_file, encoding="utf-8")
                 except UnicodeDecodeError:
+                    uploaded_file.seek(0)  # reset pointer again
                     df = pd.read_csv(uploaded_file, encoding="latin1")
                 
-                # Validate required columns
-                if not {"email", "first_name", "last_name"}.issubset(df.columns):
-                    st.error("❌ CSV must contain 'email', 'first_name', and 'last_name' columns.")
+                # Check for required columns
+                required_cols = {
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "sent_status",
+                    "first_email_subject",
+                    "first_email_body"
+                }
+                if not required_cols.issubset(df.columns):
+                    st.error(f"❌ CSV must contain columns: {', '.join(required_cols)}")
                     df = None
                 else:
+                    st.success("✅ CSV loaded successfully!")
                     st.write("📊 Preview of uploaded data (first 5 rows):")
                     st.dataframe(df.head())
         except pd.errors.EmptyDataError:
