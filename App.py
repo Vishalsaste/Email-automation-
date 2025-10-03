@@ -27,7 +27,7 @@ with st.container():
     st.subheader("📂 Upload Recipient List / Sent Emails Log")
     st.markdown(
         "CSV must contain the following columns: "
-        "**email, first_name, last_name, sent_status, first_email_subject, first_email_body**"
+        "**email, first_name, last_name**"
     )
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
@@ -53,9 +53,6 @@ with st.container():
                     "email",
                     "first_name",
                     "last_name",
-                    "sent_status",
-                    "first_email_subject",
-                    "first_email_body"
                 }
                 if not required_cols.issubset(df.columns):
                     st.error(f"❌ CSV must contain columns: {', '.join(required_cols)}")
