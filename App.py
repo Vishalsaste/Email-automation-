@@ -28,10 +28,24 @@ with st.container():
     st.markdown("CSV must contain: **email, first_name, last_name**")
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
+    df = None
     if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
-        st.write("📊 Preview of uploaded data (first 5 rows):")
-        st.dataframe(df.head())
+        try:
+            uploaded_file.seek(0)  # reset pointer
+            if uploaded_file.getbuffer().nbytes == 0:
+                st.error("❌ Uploaded file is empty. Please upload a valid CSV.")
+            else:
+                df = pd.read_csv(uploaded_file)
+                if not {"email", "first_name", "last_name"}.issubset(df.columns):
+                    st.error("❌ CSV must contain 'email', 'first_name', and 'last_name' columns.")
+                    df = None
+                else:
+                    st.write("📊 Preview of uploaded data (first 5 rows):")
+                    st.dataframe(df.head())
+        except pd.errors.EmptyDataError:
+            st.error("❌ The uploaded file is empty or not a valid CSV.")
+        except Exception as e:
+            st.error(f"⚠️ Error reading CSV: {str(e)}")
 
 # --- Email Template Section ---
 with st.container():
@@ -50,74 +64,76 @@ with st.container():
 
 # --- Send Button ---
 if st.button("🚀 Send Emails"):
-    if uploaded_file is not None and sender_email and app_password:
-        df = pd.read_csv(uploaded_file)
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(sender_email, app_password)
+    if df is not None and sender_email and app_password:
+        try:
+            server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+            server.login(sender_email, app_password)
 
-        progress = st.progress(0)
-        total = len(df)
+            progress = st.progress(0)
+            total = len(df)
 
-        success_count = 0
-        fail_count = 0
-        failed_emails = []
+            success_count = 0
+            fail_count = 0
+            failed_emails = []
 
-        for idx, row in df.iterrows():
-            recipient = row['email']
-            first = row['first_name']
-            last = row['last_name']
-            full_name = f"{first} {last}"
+            for idx, row in df.iterrows():
+                recipient = row['email']
+                first = row['first_name']
+                last = row['last_name']
+                full_name = f"{first} {last}"
 
-            # Replace placeholders
-            subject = subject_template.format(first_name=first, last_name=last, full_name=full_name)
-            body = body_template.format(first_name=first, last_name=last, full_name=full_name)
+                # Replace placeholders
+                subject = subject_template.format(first_name=first, last_name=last, full_name=full_name)
+                body = body_template.format(first_name=first, last_name=last, full_name=full_name)
 
-            # Convert newlines to <br> for HTML formatting
-            body_html = body.replace("\n", "<br>")
+                # Convert newlines to <br> for HTML formatting
+                body_html = body.replace("\n", "<br>")
 
-            msg = MIMEMultipart()
-            msg["From"] = f"{sender_name} <{sender_email}>"
-            msg["To"] = recipient
-            msg["Subject"] = subject
-            msg.attach(MIMEText(body_html, "html"))
+                msg = MIMEMultipart()
+                msg["From"] = f"{sender_name} <{sender_email}>"
+                msg["To"] = recipient
+                msg["Subject"] = subject
+                msg.attach(MIMEText(body_html, "html"))
 
-            try:
-                server.sendmail(sender_email, recipient, msg.as_string())
-                success_count += 1
-            except Exception as e:
-                fail_count += 1
-                failed_emails.append({
-                    "email": recipient,
-                    "first_name": first,
-                    "last_name": last,
-                    "error": str(e)
-                })
+                try:
+                    server.sendmail(sender_email, recipient, msg.as_string())
+                    success_count += 1
+                except Exception as e:
+                    fail_count += 1
+                    failed_emails.append({
+                        "email": recipient,
+                        "first_name": first,
+                        "last_name": last,
+                        "error": str(e)
+                    })
 
-            progress.progress((idx + 1) / total)
+                progress.progress((idx + 1) / total)
 
-            # Delay before sending the next email
-            if idx < total - 1:
-                time.sleep(delay)
+                # Delay before sending the next email
+                if idx < total - 1:
+                    time.sleep(delay)
 
-        server.quit()
+            server.quit()
 
-        # --- Final Summary ---
-        st.success(f"🎉 Process completed!\n\n✅ Sent: {success_count}\n❌ Failed: {fail_count}\n📩 Total: {total}")
+            # --- Final Summary ---
+            st.success(f"🎉 Process completed!\n\n✅ Sent: {success_count}\n❌ Failed: {fail_count}\n📩 Total: {total}")
 
-        # --- Export failed emails if any ---
-        if fail_count > 0:
-            failed_df = pd.DataFrame(failed_emails)
-            buffer = BytesIO()
-            failed_df.to_csv(buffer, index=False)
-            buffer.seek(0)
+            # --- Export failed emails if any ---
+            if fail_count > 0:
+                failed_df = pd.DataFrame(failed_emails)
+                buffer = BytesIO()
+                failed_df.to_csv(buffer, index=False)
+                buffer.seek(0)
 
-            st.error("Some emails failed. Download the list below:")
-            st.download_button(
-                label="⬇️ Download Failed Emails CSV",
-                data=buffer,
-                file_name="failed_emails.csv",
-                mime="text/csv"
-            )
+                st.error("Some emails failed. Download the list below:")
+                st.download_button(
+                    label="⬇️ Download Failed Emails CSV",
+                    data=buffer,
+                    file_name="failed_emails.csv",
+                    mime="text/csv"
+                )
+
+        except Exception as e:
+            st.error(f"⚠️ Error sending emails: {str(e)}")
     else:
-        st.warning("⚠️ Please provide login details and upload CSV.")
-      
+        st.warning("⚠️ Please provide login details and upload a valid CSV.")
