@@ -35,7 +35,13 @@ with st.container():
             if uploaded_file.getbuffer().nbytes == 0:
                 st.error("❌ Uploaded file is empty. Please upload a valid CSV.")
             else:
-                df = pd.read_csv(uploaded_file)
+                # ✅ Read CSV with encoding fallback
+                try:
+                    df = pd.read_csv(uploaded_file, encoding="utf-8")
+                except UnicodeDecodeError:
+                    df = pd.read_csv(uploaded_file, encoding="latin1")
+                
+                # Validate required columns
                 if not {"email", "first_name", "last_name"}.issubset(df.columns):
                     st.error("❌ CSV must contain 'email', 'first_name', and 'last_name' columns.")
                     df = None
